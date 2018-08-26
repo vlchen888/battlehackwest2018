@@ -1,13 +1,22 @@
 import random
 import math
 
-             
+
 """
 Branch from master, f190a4c951ba36d89fa1d8cea6f029ef58e8820a by vlchen888
 Ident testing notes:
 
 1) Each robot cycles through ident list successfully
 2) Incorrectly identifies enemies (but possibly due to both teams having same ident list)
+3) Added a "suspects" set to deal with the following error cases 
+-   Newly spawned robot in a nexus having its turn after another robot's 
+-       and thus having a signal of 0
+-   Starting robots whose turn happens before those of other robots and thus 
+-       see their ID as zero. (Can be solved in actual competition code 
+-       by having 0 as first ident signal; this cannot be done in current 
+-       two-team test code)    
+
+Code currently suffers from "TypeError: Robot is not a function" errors.
 """
 
 
@@ -41,6 +50,7 @@ class MyRobot(BCAbstractRobot):
     
     friend_ids = set([])
     enemy_ids = set([])
+    suspect_ids = set([])
     
     # List of identifying signals every robot cycles through
     # If there is a mismatch, the offender is an enemy
@@ -161,11 +171,19 @@ class MyRobot(BCAbstractRobot):
            
             if (robot_id == self.me()["id"]):
                 self.friend_ids.add(robot_id)
+                self.suspect_ids.discard(robot_id)
             elif (self.ident_sig[self.ident_sig_num] == robot_signal) or \
                (self.ident_sig[old_ident_sig_num] == robot_signal):
                 self.friend_ids.add(robot_id)
+                self.suspect_ids.discard(robot_id)
             else:
-                self.enemy_ids.add(robot_id)
+                # If robot is already suspected, move it to enemies set
+                if robot_id in self.suspect_ids:
+                    self.suspect_ids.discard(robot_id)
+                    self.enemy_ids.add(robot_id)
+                # Otherwise add to suspected
+                else:
+                    self.suspect_ids.add(robot_id)
                
             # Check for intersections and remove them from friends
             self.friend_ids = self.friend_ids.difference(self.friend_ids.intersection(self.enemy_ids))
