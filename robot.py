@@ -53,6 +53,7 @@ class MyRobot(BCAbstractRobot):
 
     new_nexus_target_x = -1
     new_nexus_target_y = -1
+    destin_loc = [(10,10), (5,5), (5,15), (15,15), (5, 15)]
 
 
     map_arr = []
@@ -84,44 +85,67 @@ class MyRobot(BCAbstractRobot):
     def turn(self):
         # Log some metadata
         self.num_turns += 1
-        
+        self.NEXUS_MASK = 8
         self.curr_x = self.me()["x"]
         self.curr_y = self.me()["y"]
         
         self.map_arr = self.get_visible_map()
         
         num_friendlies = self._get_num_friendlies()
-        
+        if self.num_turns <= 1:
+            self.destin_loc = [(10,10), (5,5), (5,15), (15,15), (5, 15)]
         if self.me()["team"] == 1:
+            #if self.phase != "IN NEXUS" and self.num_turns%25 == self.num_turns/25:
+            #    self.phase == "FIND_TEAM"
+            
+            
+            # Every 25 turns, we head to a new loc...
             if self.phase == "FIND_TEAM":
                 if self.num_turns > 20:
                     self.phase = "FIND_EXISTING_NEXUS"
-                target_x = 10
-                target_y = 10
+                #(target_x, target_y) = self.destin_loc[self.num_turns%25]
+                (target_x, target_y) = (10, 10)
                 return self._get_move_pathfind(target_x, target_y)
         
-            # Can choose to not try and find existing nexus every time,
-            # but since several can be heading there, might
+            # Can choose to not try and find existing nexus every time while
+            # in phase, but since several can be heading there, might
             # want to check it...
+            self.log("Printing out data....")
             self.log(self.phase)
+            self.log(self.me())
             if self.phase == "IN NEXUS":
                 return
             if self.phase == "FIND_EXISTING_NEXUS":
                 (target_x, target_y) = self._find_existing_nexus()
                 if target_y != -1:
-                    self.log(target_x, target_y)
                     if target_x != curr_x and target_y != curr_y:
-                        self.phase = "IN NEXUS"
+                        self.log("Heading to..."+target_x+", "+target_y)
+                        self.log("Currently at ..."+self.curr_x+", "+self.curr_y)
                         return self._get_move_pathfind(target_x, target_y)
                     else:
+                        self.phase = "IN NEXUS"
                         return
             self.phase = "FIND_NEW_NEXUS"
             if self.phase == "FIND_NEW_NEXUS":
-                self._find_new_nexus()
+                res = self._find_new_nexus()
+                if res == False:
+                    #self.phase == "FIND_EXISTING_NEXUS"
+                    return self.move(random.choice([
+                                                    bc.NORTH,
+                                                    bc.NORTHEAST,
+                                                    bc.EAST,
+                                                    bc.SOUTHEAST,
+                                                    bc.SOUTH,
+                                                    bc.SOUTHWEST,
+                                                    bc.WEST,
+                                                    bc.NORTHWEST,
+                                                    ]))
             if self.phase == "MOVE_TO_NEW_NEXUS":
                 res = self._get_move_find_new_nexus()
                 if res != None:
                     return res
+                self.log("Returning to do nothing...")
+                return self._get_move_pathfind(0, 0)
         else:
             return self._get_move_pathfind(0, 0)
         
@@ -153,8 +177,10 @@ class MyRobot(BCAbstractRobot):
     
 
     def _get_move_pathfind(self, target_x, target_y):
+        self.log("path finding...")
         dX, dY = self._get_best_direction(target_x, target_y)
         if dX == 0 and dY == 0:
+            self.log("We are at the spot!!")
             return None
         desired_dir = self.relative_pos_to_dir(dX, dY)
         # Try to avoid the obstacle. Use bugfind
@@ -166,9 +192,76 @@ class MyRobot(BCAbstractRobot):
             if self.get_in_direction(nextDir) == bc.EMPTY:
                 return self.move(nextDir)
             i += 1
-
+        self.log("hmmmm")
         return None
     
+    ############### METHODS FOR ATTACKING ##########################
+    def attack_logic(self):
+        # Want to check if the spot is already occupied.
+        # If it is, we want to find another one
+        if self.phase == "MOVING TO ATTACK":
+            if self.get_relative_pos(self.dest_x - self.curr_x, self.dest_y - self.curr_y) != bc.EMPTY:
+                res = self._check_friendly_near_enemy(mapp, e.x, e.y)
+                if res != None:
+                    return res
+                else:
+                    self.phase = "TODO: CHANGE TO NEXUS!!!!"
+        else
+            res = self._fight_or_flight()
+            if res != None:
+                return res
+            else:
+                self.phase = "TODO: CHANGE TO NEXUS!!!!"
+
+    def _fight_or_flight(self):
+        '''
+        We will almost always be trying to kill...
+        But if there is a large enough enemy swarm... nah dude.
+        Also, determine if we want to chase...
+        '''
+        currentMap = self.get_visible_map()
+        currentRobos = self.get_visible_robots()
+        
+        # First, want to check for enemies immediate to you.
+        for i in range(-1,2):
+            for j in range(-1,2):
+                state = self.get_in_direction(self.relative_pos_to_dir(i,j))
+                if state != bc.HOLE and state != bc.EMPTY:
+                if self._is_friendly(state) == False:
+                    self.phase = "ATTACKING"
+                    return self.attack(self.relative_pos_to_dir(i,j))
+        
+        # Secondly, we check if we should be chasing.
+        for i in currentRobos:
+            if self._is_friendly(i.id) == false:
+                return self._check_friendly_near_enemy(currentMap, i.x, i.y)
+
+    def _check_friendly_near_enemy(mapp, e.x, e.y):
+        '''
+        Returns None if there are no enemies with adjacent friendlies.
+        Otherwise changes the phase and sets the destination coords.
+        '''
+        lf_spot = (-1,-1)
+        for i in range(-1,2):
+            for j in range(-1,2):
+                state = self.get_relative_pos(e.x - self.curr_x+i, e.y - self.curr_y+j)
+                
+                # still trying to find a friendly near the enemy....
+                if lf_spot == False and state != bc.HOLE and state != bc.EMPTY:
+                    if self._is_friendly(state):
+                        self.phase = "MOVING TO ATTACK"
+                
+                # found a friendly... determining where to go....
+                elif lf_spot and state == bc.EMPTY:
+                    self.dest_x = e.x - self.curr_x+i
+                    self.dest_y = e.y - self.curr_y+j
+                        return self._get_move_pathfind(self.dest_x, self.dest_y)
+        return None
+
+    ############### END METHODS FOR ATTACKING ##########################
+
+                                                                                                
+                                                                                                
     ############### METHODS FOR NEXUS FINDING ##########################
     def _examine_spot(self, abs_x, abs_y):
         arr_x, arr_y = self._get_arr_coord_from_abs(abs_x, abs_y)
@@ -203,6 +296,7 @@ class MyRobot(BCAbstractRobot):
         return True
 
 
+    # What if an enemy is at/moved to that position???
     def _is_master_present(self, top_position_x, top_position_y):
         if self._is_robot(top_position_x, top_position_y):
             robot_id = self._examine_spot(top_position_x, top_position_y)
@@ -239,13 +333,26 @@ class MyRobot(BCAbstractRobot):
         if self.new_nexus_target_x == self.curr_x and self.new_nexus_target_y == self.curr_y:
             self.log("changing signal...We are at NEXUS")
             self.phase = "IN NEXUS"
-            self.signal(self.NEXUS_MASK|signal)
-            return
-            
-        if self._is_visible(self.new_nexus_target_x, self.new_nexus_target_y):
-            if self._is_master_present(self.new_nexus_target_x, self.new_nexus_target_y):
-                self.phase = "FIND_EXISTING_NEXUS"
-                return None
+            newSig = self.NEXUS_MASK|self.signal
+            self.signal(newSig)
+            return None
+        self.log("Heading to..."+self.new_nexus_target_x+", "+self.new_nexus_target_y)
+        self.log("Currently at ..."+self.curr_x+", "+self.curr_y)
+        currentRobos = self.get_visible_robots()
+    
+        for i in currentRobos:
+            if self._is_friendly(i.id):
+                signal = i.signal
+                if self.NEXUS_MASK&signal == self.NEXUS_MASK:
+                    self.phase = "FIND_EXISTING_NEXUS"
+                    self.log("master at... "+i.x+", "+i.y)
+                    self.log("Changed phase...FIND EXISTING NEXUS")
+                    return None
+        #if self._is_visible(self.new_nexus_target_x, self.new_nexus_target_y):
+        #      if self._is_master_present(self.new_nexus_target_x, self.new_nexus_target_y):
+        #        self.phase = "FIND_EXISTING_NEXUS"
+        #        return None
+        
         return self._get_move_pathfind(self.new_nexus_target_x, self.new_nexus_target_y)
 
     ############### END METHODS FOR NEXUS FINDING ##########################
@@ -259,10 +366,12 @@ class MyRobot(BCAbstractRobot):
         return 999999
     
     def _compute_min_nexus_dist(self, master_x, master_y):
-        one = compute_moves(self.me().x, self.me().y, master_x, master_y+2)
-        two = compute_moves(self.me().x, self.me().y, master_x-1, master_y+1)
-        three = compute_moves(self.me().x, self.me().y, master_x+1, master_y+1)
+        self.log(master_x,master_y)
+        one = self._compute_moves(self.me().x, self.me().y, master_x, master_y+2)
+        two = self._compute_moves(self.me().x, self.me().y, master_x-1, master_y+1)
+        three = self._compute_moves(self.me().x, self.me().y, master_x+1, master_y+1)
         # This means that the target is
+        self.log("finished computing... now deciding...")
         if one & two & three == 999999:
             return (-1, -1)
         if one <= two and one <= three:
@@ -286,7 +395,7 @@ class MyRobot(BCAbstractRobot):
             if self._is_friendly(i.id):
                 signal = i.signal
                 if self.NEXUS_MASK&signal == self.NEXUS_MASK:
-                    return self.compute_min_nexus_dist(i.x, i.y)
+                    return self._compute_min_nexus_dist(i.x, i.y)
         return (-1, -1)
 
 
