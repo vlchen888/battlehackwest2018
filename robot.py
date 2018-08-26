@@ -112,7 +112,7 @@ class MyRobot(BCAbstractRobot):
         num_friendlies = self._get_num_friendlies()
 
         self.signal(self.me().team)
-        if self.me()["team"] == 1:
+        if self.me()["team"] in [0, 1]:
             if self.phase == "FIND_TEAM":
                 if self._is_new_robot():
                     self.generated_robot = True
@@ -129,8 +129,12 @@ class MyRobot(BCAbstractRobot):
                 elif self.num_turns > 20:
                     self.phase = "FIND_NEW_NEXUS"
                 else:
-                    target_x = 12
-                    target_y = 12
+                    if self.me()["team"] == 1:
+                        target_x = 13
+                        target_y = 13
+                    else:
+                        target_x = 7
+                        target_y = 7
                     return self._get_move_pathfind(target_x, target_y)
             if self.phase == "FIND_TARGET":
                 target_x = self.general_targets[self.general_target_index][0]
