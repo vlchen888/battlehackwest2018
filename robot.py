@@ -376,8 +376,55 @@ class MyRobot(BCAbstractRobot):
             return True
         return False
 
-    ##########################################################
+    ############### END METHODS FOR NEW ROBOTS ##############
 
+    ############## METHODS FOR SWARM APPROACH ###############
+
+    def _find_best_swarm_spot(self):
+        vis_map = self.get_visible_map()
+        abs_x = self.me().x
+        abs_y = self.me().y
+        score_map = []
+        max_cell = None
+        max_score = -1
+        for i in range(7):
+            row = []
+            for j in range(7)
+                row.append(0)
+            score_map.append(row)
+        for y in range(-3, 4):
+            for x in range(-3, 4):
+                corners = [
+                    [1, 1],
+                    [-1, -1],
+                    [-1, 1],
+                    [1, -1]
+                ]
+                edges = [
+                    [1, 0],
+                    [-1, 0],
+                    [0, 1],
+                    [0, -1]
+                ]
+                for corner in corners:
+                    rel_x = x + corner[0]
+                    rel_y = y + corner[1]
+                    cell_type = vis_map[rel_x][rel_y]
+                    if cell_type not in [bc.EMPTY, bc.HOLE]:
+                        score_map[rel_x][rel_y] += 1
+                for edge in edges:
+                    rel_x = x + edge[0]
+                    rel_y = y + edge[1]
+                    cell_type = vis_map[rel_x][rel_y]
+                    if cell_type == bc.EMPTY:
+                        score_map[rel_x][rel_y] += 1
+        for y in range(-3, 4):
+            for x in range(-3, 4):
+                if score_map[y][x] > max_score:
+                    max_score = score_map[y][x]
+                    max_cell = [x, y]
+        return max_cell
+    ############## END METHODS FOR SWARM APPROACH ###########
 
     ############### METHODS FOR BFS ##########################
 
