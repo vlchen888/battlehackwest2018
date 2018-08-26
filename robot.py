@@ -83,26 +83,45 @@ class MyRobot(BCAbstractRobot):
 
     def turn(self):
         # Log some metadata
-        self.num_turns += 1 
-
+        self.num_turns += 1
+        
         self.curr_x = self.me()["x"]
         self.curr_y = self.me()["y"]
-
+        
         self.map_arr = self.get_visible_map()
-
+        
         num_friendlies = self._get_num_friendlies()
-
+        
         if self.me()["team"] == 1:
             if self.phase == "FIND_TEAM":
                 if self.num_turns > 20:
-                    self.phase = "FIND_NEW_NEXUS"
+                    self.phase = "FIND_EXISTING_NEXUS"
                 target_x = 10
                 target_y = 10
                 return self._get_move_pathfind(target_x, target_y)
-            elif self.phase == "FIND_NEW_NEXUS":
+        
+            # Can choose to not try and find existing nexus every time,
+            # but since several can be heading there, might
+            # want to check it...
+            self.log(self.phase)
+            if self.phase == "IN NEXUS":
+                return
+            if self.phase == "FIND_EXISTING_NEXUS":
+                (target_x, target_y) = self._find_existing_nexus()
+                if target_y != -1:
+                    self.log(target_x, target_y)
+                    if target_x != curr_x and target_y != curr_y:
+                        self.phase = "IN NEXUS"
+                        return self._get_move_pathfind(target_x, target_y)
+                    else:
+                        return
+            self.phase = "FIND_NEW_NEXUS"
+            if self.phase == "FIND_NEW_NEXUS":
                 self._find_new_nexus()
-            elif self.phase == "MOVE_TO_NEW_NEXUS":
-                return self._get_move_find_new_nexus()
+            if self.phase == "MOVE_TO_NEW_NEXUS":
+                res = self._get_move_find_new_nexus()
+                if res != None:
+                    return res
         else:
             return self._get_move_pathfind(0, 0)
         
@@ -217,9 +236,15 @@ class MyRobot(BCAbstractRobot):
 
 
     def _get_move_find_new_nexus(self):
+        if self.new_nexus_target_x == self.curr_x and self.new_nexus_target_y == self.curr_y:
+            self.log("changing signal...We are at NEXUS")
+            self.phase = "IN NEXUS"
+            self.signal(self.NEXUS_MASK|signal)
+            return
+            
         if self._is_visible(self.new_nexus_target_x, self.new_nexus_target_y):
             if self._is_master_present(self.new_nexus_target_x, self.new_nexus_target_y):
-                self.phase = "FIND_NEW_NEXUS"
+                self.phase = "FIND_EXISTING_NEXUS"
                 return None
         return self._get_move_pathfind(self.new_nexus_target_x, self.new_nexus_target_y)
 
