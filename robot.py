@@ -55,7 +55,7 @@ class MyRobot(BCAbstractRobot):
     curr_y = -1
 
     VIEW_SIZE = 7
-    
+    NEXUS_MASK = 8
 
     def relative_pos_to_dir(self, dX, dY):
         if dX == 0 and dY == -1:
@@ -91,14 +91,16 @@ class MyRobot(BCAbstractRobot):
         num_friendlies = self._get_num_friendlies()
 
         if self.me()["team"] == 1:
-            if phase == "FIND_TEAM":
+            if False:
                 target_x = 10
                 target_y = 10
                 return self._get_move_pathfind(target_x, target_y)
-            elif phase == "BUILD_NEXUS":
-                pass
+            else:
+                (target_x, target_y) = self._find_existing_nexus()
+                if target_y != -1:
+                    return self._get_move_pathfind(target_x, target_y)
         else:
-            return
+            return self._get_move_pathfind(0, 0)
         
 
     # TODO
@@ -142,7 +144,48 @@ class MyRobot(BCAbstractRobot):
 
         return None
     
+    ############### METHODS FOR FINDING EXISTING NEXUS ##########################
+    def _compute_moves(self, curr_x, curr_y, target_x, target_y):
+        '''
+            This is a good approx. to get minimal number of moves.
+            '''
+        if self.get_relative_pos(target_x - curr_x, target_y - curr_y) == bc.EMPTY:
+            return max(abs(curr_x - target_x)**2 + abs(curr_y - target_y)**2)
+        return 999999
+    
+    def _compute_min_nexus_dist(self, master_x, master_y):
+        one = compute_moves(self.me().x, self.me().y, master_x, master_y+2)
+        two = compute_moves(self.me().x, self.me().y, master_x-1, master_y+1)
+        three = compute_moves(self.me().x, self.me().y, master_x+1, master_y+1)
+        # This means that the target is
+        if one & two & three == 999999:
+            return (-1, -1)
+        if one <= two and one <= three:
+            return (master_x, master_y+2)
+        elif two <= three and two <= one:
+            return (master_x-1, master_y+1)
+        elif two <= three and two <= one:
+            return (master_x+1, master_y+1)
 
+    def _find_existing_nexus(self):
+        '''
+            Looking for the nearby robots to see if there is an existing
+            master. If one is found, find the position that is closest to it and
+            goes towards it.
+            Returns true if an existing nexus is found.
+        '''
+        currentMap = self.get_visible_map()
+        currentRobos = self.get_visible_robots()
+        
+        for i in currentRobos:
+            if self._is_friendly(i.id):
+                signal = i.signal
+                if self.NEXUS_MASK&signal == self.NEXUS_MASK:
+                    return self.compute_min_nexus_dist(i.x, i.y)
+        return (-1, -1)
+
+
+    ##########################################################
 
 
     ############### METHODS FOR BFS ##########################
