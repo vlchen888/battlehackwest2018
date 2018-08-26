@@ -200,18 +200,30 @@ class MyRobot(BCAbstractRobot):
         # Want to check if the spot is already occupied.
         # If it is, we want to find another one
         if self.phase == "MOVING TO ATTACK":
+            # Check if we are at the destination, then call flight or fight to
+            # attack.
+            if self.curr_x == self.dest_x and self.curr_x == self.dest_y:
+                res = self._fight_or_flight()
+                if res != None:
+                    return res
+                else:
+                    self.phase = "TODO: CHANGE TO NEXUS!!!!"
+                    return None
+            #
             if self.get_relative_pos(self.dest_x - self.curr_x, self.dest_y - self.curr_y) != bc.EMPTY:
                 res = self._check_friendly_near_enemy(mapp, e.x, e.y)
                 if res != None:
                     return res
                 else:
                     self.phase = "TODO: CHANGE TO NEXUS!!!!"
+                    return None
         else
             res = self._fight_or_flight()
             if res != None:
                 return res
             else:
                 self.phase = "TODO: CHANGE TO NEXUS!!!!"
+                return None
 
     def _fight_or_flight(self):
         '''
