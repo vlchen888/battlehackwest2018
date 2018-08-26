@@ -60,7 +60,7 @@ class MyRobot(BCAbstractRobot):
     VIEW_SIZE = 7
 
     general_targets = [
-        [10, 10],
+        [15, 15],
         [17, 10],
         [17, 17],
         [24, 17],
@@ -72,6 +72,12 @@ class MyRobot(BCAbstractRobot):
     general_target_index = 0
     
     NEXUS_MASK = 8
+
+    previous_num_friendlies = 0
+
+    stationary_num_friendly_count = 0
+
+    generated_robot = False
 
     def relative_pos_to_dir(self, dX, dY):
         if dX == 0 and dY == -1:
@@ -105,21 +111,26 @@ class MyRobot(BCAbstractRobot):
         
         num_friendlies = self._get_num_friendlies()
 
-        if self.me()["team"] == 1
+        self.signal(self.me().team)
+        if self.me()["team"] == 1:
             if self.phase == "FIND_TEAM":
                 if self._is_new_robot():
+                    self.generated_robot = True
+                    self.phase = "SWARM"
+                    """
                     self._update_target()
                     target_x = self.general_targets[self.general_target_index][0]
                     target_y = self.general_targets[self.general_target_index][1]                    
-                    if _in_target_area():
+                    if self._in_target_area():
                         self.phase = "FIND_TARGET"
                     else:
                         self.phase = "FIND_NEW_NEXUS"
+                    """
                 elif self.num_turns > 20:
                     self.phase = "FIND_NEW_NEXUS"
                 else:
-                    target_x = 10
-                    target_y = 10
+                    target_x = 12
+                    target_y = 12
                     return self._get_move_pathfind(target_x, target_y)
             if self.phase == "FIND_TARGET":
                 target_x = self.general_targets[self.general_target_index][0]
@@ -131,6 +142,47 @@ class MyRobot(BCAbstractRobot):
             # Can choose to not try and find existing nexus every time,
             # but since several can be heading there, might
             # want to check it...
+            if ((self.num_turns - self.me().id) % 6) < 4 and \
+               self.num_turns < 35 and not self.generated_robot:
+                return
+            if ((self.num_turns - self.me().id) % 6) > 4:
+                return
+
+            self.log(["preswarm", self.me()])
+            target_x, target_y = self._find_best_swarm_spot()
+            """
+            next_move = self._get_next_move_to_location(
+                target_x - self.curr_x, target_y - self.curr_y)
+            next_move = None
+            if next_move != None:
+                return self.move(next_move)
+            else:
+            """
+            if target_x == self.curr_x and target_y == self.curr_y:
+                opponent_dir = self._find_opponent()
+                if opponent_dir != None:
+                    self.log(["attacking in this direction:", opponent_dir])
+                    return self.attack(opponent_dir)
+
+                num_friendlies = self._get_num_friendlies()
+                self.log(["num_friendlies", num_friendlies, self.stationary_num_friendly_count])
+                if num_friendlies != self.previous_num_friendlies:
+                    self.stationary_num_friendly_count = 0
+                else:
+                    self.stationary_num_friendly_count += 1
+                    if self.stationary_num_friendly_count > 2:
+                        rel_legal_moves = [[0, 0]]
+                        for rel_y in range(-1, 2):
+                            for rel_x in range(-1, 2):
+                                if self.map_arr[rel_y + 3][rel_x + 3] == bc.EMPTY:
+                                    rel_legal_moves.append(rel_x, rel_y)
+                        rel_legal_move = random.choice(rel_legal_moves)
+                        target_x += rel_legal_move[0]
+                        target_y += rel_legal_move[1]
+                self.previous_num_friendlies = num_friendlies
+
+            return self._get_move_pathfind(target_x, target_y)
+            """
             self.log(self.phase)
             if self.phase == "IN NEXUS":
                 return
@@ -150,21 +202,45 @@ class MyRobot(BCAbstractRobot):
                 res = self._get_move_find_new_nexus()
                 if res != None:
                     return res
+            """
         else:
-            return self._get_move_pathfind(0, 0)
-        
+            return self._get_move_pathfind(0, 0)   
 
     # TODO
     def _is_friendly(self, uid):
-        return True
+        robot = self.get_robot(uid)
+        if robot == None:
+            return True
+        if robot.signal == self.me().team:
+            return True
+        else:
+            return False
 
+
+    def _find_opponent(self):
+        me = self.me()
+        max_health = None
+        max_opponent = None
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+                val = self.map_arr[i + 3][j + 3]
+                if val not in [bc.EMPTY, bc.HOLE] and not self._is_friendly(val):
+                    enemy_health = self.get_robot(val).health
+                    if max_health == None or enemy_health > max_health:
+                        max_health = enemy_health
+                        max_opponent = val
+        if max_opponent != None:
+            max_robot = self.get_robot(max_opponent)
+            return self.relative_pos_to_dir(max_robot.x - me.x, max_robot.y - me.y)
+        return None
 
     def _get_num_friendlies(self):
         num_friendlies = 0
         for x in range(self.VIEW_SIZE):
             for y in range(self.VIEW_SIZE):
                 val = self.map_arr[y][x]
-                if (not val == bc.EMPTY and not val == bc.HOLE and self._is_friendly(val)):
+                if (not val == bc.EMPTY and not val == bc.HOLE and \
+                   self._is_friendly(val)):
                     num_friendlies += 1
         return num_friendlies
 
@@ -221,13 +297,51 @@ class MyRobot(BCAbstractRobot):
         return (arr_x, arr_y)
 
 
-    def _is_valid_nexus_center(self, abs_x, abs_y):
+    def _is_potential_nexus_center(self, abs_x, abs_y):
         """Returns True when abs_x, abs_y is a valid nexus center."""
         # Only could be a nexus if there are no holes
         for dx in range(-1, 2):
             for dy in range(-1, 2):
                 if self._is_hole(abs_x + dx, abs_y + dy):
                     return False
+        return True
+
+
+    def _is_nexus_center(self, rel_x, rel_y, vis_map):
+        if abs(rel_x) > 2 or abs(rel_y) > 2:
+            return False
+        if vis_map == None:
+            self.log(["nexus centere vis map is none", vis_map])
+            return False
+        if vis_map[rel_y + 3][rel_x + 3] == bc.HOLE:
+            return False
+        for y in range(-1, 2):
+            for x in range(-1, 2):
+                if abs(y) == abs(x) and y != 0:
+                    #corner
+                    if vis_map[3 + rel_y + y][3 + rel_x + x] != bc.EMPTY:
+                        return False
+                else:
+                    #edge
+                    if vis_map[3 + rel_y + y][3 + rel_x + x] in [bc.EMPTY, bc.HOLE]:
+                        return False
+        return True
+
+
+    def _is_anti_nexus(self, rel_x, rel_y, vis_map):
+        if abs(rel_x) > 2 or abs(rel_y) > 2:
+            return False
+        if vis_map == None:
+            self.log(["nexus centere vis map is none", vis_map])
+            return False
+
+        for y in range(-1, 2):
+            for x in range(-1, 2):
+                if abs(y) != abs(x):
+                    # edges
+                    if vis_map[3 + rel_y + y][3 + rel_x + x] \
+                       in [bc.EMPTY, bc.HOLE]:
+                        return False
         return True
 
 
@@ -245,7 +359,7 @@ class MyRobot(BCAbstractRobot):
             for dy in range(-2, 3):
                 next_x = self.curr_x + dx
                 next_y = self.curr_y + dy
-                if next_x >= 0 and next_y >= 0 and self._is_valid_nexus_center(next_x, next_y):
+                if next_x >= 0 and next_y >= 0 and self._is_potential_nexus_center(next_x, next_y):
                     top_position_x = next_x
                     top_position_y = next_y - 1
                     if not self._is_master_present(top_position_x, top_position_y):
@@ -322,6 +436,7 @@ class MyRobot(BCAbstractRobot):
         """
         Are you close to a target area
         """
+        me = self.me()
         if abs(me.x - target_x) < 3 and \
            abs(me.y - target_y) < 3:
             return True
@@ -360,7 +475,8 @@ class MyRobot(BCAbstractRobot):
         ]
         for cell in cells:
             cell_type = self.get_relative_pos(cell[0], cell[1])
-            if cell_type in [bc.EMPTY, bc.HOLE] or not _is_friendly(cell_type.id):
+            if cell_type in [bc.EMPTY, bc.HOLE] or not \
+               self._is_friendly(cell_type):
                 return False
         return True
 
@@ -379,21 +495,15 @@ class MyRobot(BCAbstractRobot):
     ############### END METHODS FOR NEW ROBOTS ##############
 
     ############## METHODS FOR SWARM APPROACH ###############
-
-    def _find_best_swarm_spot(self):
-        vis_map = self.get_visible_map()
-        abs_x = self.me().x
-        abs_y = self.me().y
+    def _eval_board(self, vis_map):
         score_map = []
-        max_cell = None
-        max_score = -1
         for i in range(7):
             row = []
-            for j in range(7)
+            for j in range(7):
                 row.append(0)
             score_map.append(row)
-        for y in range(-3, 4):
-            for x in range(-3, 4):
+        for y in range(1, 6):
+            for x in range(1, 6):
                 corners = [
                     [1, 1],
                     [-1, -1],
@@ -406,24 +516,104 @@ class MyRobot(BCAbstractRobot):
                     [0, 1],
                     [0, -1]
                 ]
+                try:
+                    if self._is_nexus_center(x - 3, y -3, vis_map):
+                        try:
+                            score_map[y][x] += 100
+                        except:
+                            self.log(['rekt while score map adding'])
+                except:
+                    self.log(["rekt while nexusing", x, y, vis_map])
                 for corner in corners:
                     rel_x = x + corner[0]
                     rel_y = y + corner[1]
-                    cell_type = vis_map[rel_x][rel_y]
-                    if cell_type not in [bc.EMPTY, bc.HOLE]:
-                        score_map[rel_x][rel_y] += 1
+                    if rel_x < 0 or rel_x > 6 or rel_y < 0 or rel_y > 6:
+                        continue
+                    cell_type = vis_map[rel_y][rel_x]
+
+                    if cell_type == bc.EMPTY:
+                        pass
+                    elif cell_type == bc.HOLE:
+                        score_map[y][x] -= 1
+                    else:
+                        try:
+                            if self._is_friendly(cell_type):
+                                score_map[y][x] += 5
+                            else:
+                                pass
+                                # self.log(["enemy at", x, y, cell_type])
+                        except:
+                            self.log(["rekt while friendlying", vis_map])
+                       
+
                 for edge in edges:
                     rel_x = x + edge[0]
                     rel_y = y + edge[1]
-                    cell_type = vis_map[rel_x][rel_y]
+                    if rel_x < 0 or rel_x > 6 or rel_y < 0 or rel_y > 6:
+                        continue
+                    cell_type = vis_map[rel_y][rel_x]
                     if cell_type == bc.EMPTY:
-                        score_map[rel_x][rel_y] += 1
-        for y in range(-3, 4):
-            for x in range(-3, 4):
-                if score_map[y][x] > max_score:
-                    max_score = score_map[y][x]
-                    max_cell = [x, y]
-        return max_cell
+                        score_map[y][x] += 1
+                    elif cell_type == bc.HOLE:
+                        score_map[y][x] -= 4
+                    else:
+                        score_map[y][x] -= 3
+        return score_map
+
+
+    def _get_score_sum(self, score_map, vis_map):
+        score_sum = 0
+        for y in range(7):
+            for x in range(7):
+                if vis_map[y][x] not in [bc.EMPTY, bc.HOLE]:
+                    score_sum += score_map[y][x]
+        return score_sum
+
+
+    def _find_best_swarm_spot(self):
+        abs_x = self.me().x
+        abs_y = self.me().y
+        clean_vis_map = self._matrix_copy(self.get_visible_map())
+        clean_vis_map[3][3] = bc.EMPTY
+        best_move = [abs_x, abs_y]
+        best_score = None
+        rel_empty_spaces = []
+        for y in range(2, 5):
+            for x in range(2, 5):
+                if clean_vis_map[y][x] == bc.EMPTY:
+                    clean_vis_map[y][x] = self.me().id
+                    try:
+                        score_map = self._eval_board(clean_vis_map)
+                    except:
+                        self.log('rekt while evaling')
+                    try:
+                        score_sum = self._get_score_sum(score_map, clean_vis_map)
+                    except:
+                        self.log('rekt while summing')
+                    # special cases
+                    if self._is_nexus_center(x - 3, y - 3, clean_vis_map):
+                        score_sum -= 190
+                        self.log('centre of nexus', score_sum, best_score)
+
+                    for i in range(-1, 2):
+                        for j in range(-1, 2):
+                            if clean_vis_map[y + i][x + j] == bc.HOLE:
+                                if self._is_anti_nexus(x + j - 3, y + i - 3,
+                                                       clean_vis_map):
+                                    score_sum -= 30
+
+                    clean_vis_map[y][x] = bc.EMPTY
+                    if best_score == None or score_sum > best_score:
+                        best_score = score_sum
+                        best_move = [x + abs_x - 3, y + abs_y - 3]
+                    elif score_sum == best_score and random.randint(0, x + y) == 0:
+                        best_score = score_sum
+                        best_move = [x + abs_x - 3, y + abs_y - 3]
+                    # self.log(["move and value", x - 3, y - 3, score_sum])
+                    rel_empty_spaces.append(x - 3, y - 3)
+
+        self.log(["selected space:", best_move])
+        return best_move
     ############## END METHODS FOR SWARM APPROACH ###########
 
     ############### METHODS FOR BFS ##########################
@@ -433,6 +623,16 @@ class MyRobot(BCAbstractRobot):
         for i in arr:
             new_arr.append(i)
         return new_arr
+
+
+    def _matrix_copy(self, mat):
+        new_matrix = []
+        for i in mat:
+            row = []
+            for j in i:
+                row.append(j)
+            new_matrix.append(row)
+        return new_matrix
 
 
     def _get_min_path(self, dX, dY):
@@ -489,6 +689,8 @@ class MyRobot(BCAbstractRobot):
 
 
     def _get_next_move_to_location(self, dX, dY):
+        if dX == 0 and dY == 0:
+            return None
         try:
             path = self._get_min_path(dX, dY)
         except:
@@ -502,6 +704,7 @@ class MyRobot(BCAbstractRobot):
             if self.get_relative_pos(x, y) != bc.EMPTY:
                 # self.log(["move not empty", self.get_relative_pos(x, y)])
                 return None
+            self.log(["selected move", x, y])
             return self.relative_pos_to_dir(x, y)
             # self.log([x, y, "didn't match any direction"])
         else:
@@ -510,14 +713,14 @@ class MyRobot(BCAbstractRobot):
 
     ############### END METHODS FOR BFS ##########################
     ############### OTHER BFS METHODS ############################
-
+    """
     def _get_closest_friendly_robot(self):
         me = self.me()
         closest_robot = None
         smallest_distance = None
         for robot in self.get_visible_robots():
             # self.log(["my stuff and their signal", self.me(), robot.signal])
-            if me.id != robot.id and _is_friendly(robot):
+            if me.id != robot.id and self._is_friendly(robot):
                 distance = math.sqrt((robot.x - me.x) ** 2 + (robot.y - me.y) ** 2)
                 if smallest_distance == None or distance < smallest_distance:
                     closest_robot = robot
@@ -533,7 +736,7 @@ class MyRobot(BCAbstractRobot):
                 if vis_map[i][j] == robot.id:
                     return (j - 3, i - 3)
         return None
-
+    """
 
     def _get_move_to_robot(self):
         me = self.me()
