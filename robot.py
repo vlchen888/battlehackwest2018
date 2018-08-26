@@ -47,9 +47,8 @@ class MyRobot(BCAbstractRobot):
     # List of identifying signals every robot cycles through
     # If there is a mismatch, the offender is an enemy
     IDENT_SIG_LEN = 8
-    
     ident_sig = [6, 4, 2, 5, 3, 7, 1, 0]
-    ident_sig_num = 0          # Current # identifier being broadcast
+    ident_sig_num = None
 
 
     num_turns = 0
@@ -84,15 +83,21 @@ class MyRobot(BCAbstractRobot):
             
 
     def turn(self):
+        if self.ident_sig_num == None:
+            self.ident_sig_num = self._init_ident_num()          # Current # identifier being broadcast
+        
         if self.me()["team"] == 0:
             self.ident_sig = [0, 2, 4, 5, 7, 1, 6]
             
         # Log some metadata
         self.num_turns += 1 
         self._identify()
+        
+        # ##############################
         self.log(self.me()["signal"])
         self.log(self.friend_ids)
         self.log(self.enemy_ids)
+        # ##############################
         
         self.curr_x = self.me()["x"]
         self.curr_y = self.me()["y"]
@@ -165,12 +170,12 @@ class MyRobot(BCAbstractRobot):
         #   - Newly spawned robot           - return ident index of a neighbor
         parents = self._get_parents()
         # No parents - we are on turn 0
-        if parents.len == 0:
+        if len(parents) == 0:
             # index is 0 on startup
             return 0
         else:
             # Get current signal of a parent
-            new_sig = parents[0].me()["signal"]
+            new_sig = parents[0].signal
            
             # Find index of new signal and return it
             return self.ident_sig.index(new_sig)
