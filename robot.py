@@ -241,8 +241,7 @@ class MyRobot(BCAbstractRobot):
     #   doesn't matter, since all starting robots are initialized with same ident index
     def _get_parents(self):
         parents = []
-        for dx in [-1, 1]:
-            for dy in [-1, 1]:
+        for dx, dy in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
                 thing_around = self.get_relative_pos(dx, dy)
                 if (type(thing_around) == type(self)):
                     parents.append(thing_around)
