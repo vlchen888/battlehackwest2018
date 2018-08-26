@@ -58,7 +58,8 @@ class MyRobot(BCAbstractRobot):
     map_arr = []
 
     VIEW_SIZE = 7
-    targets = [
+
+    general_targets = [
         [10, 10],
         [17, 10],
         [17, 17],
@@ -68,7 +69,7 @@ class MyRobot(BCAbstractRobot):
         [31, 31]
     ]
 
-    target_index = 0
+    general_target_index = 0
     
     NEXUS_MASK = 8
 
@@ -104,16 +105,32 @@ class MyRobot(BCAbstractRobot):
 
         num_friendlies = self._get_num_friendlies()
 
-        if self.me()["team"] == 1:
+        if self.me()["team"] == 1
             if self.phase == "FIND_TEAM":
-                if self.num_turns > 20:
+                if self._is_new_robot():
+                    self._update_target()
+                    target_x = self.general_targets[self.general_target_index][0]
+                    target_y = self.general_targets[self.general_target_index][1]                    
+                    if _in_target_area():
+                        self.phase = "FIND_TARGET"
+                    else:
+                        self.phase = "FIND_NEW_NEXUS"
+                elif self.num_turns > 20:
                     self.phase = "FIND_NEW_NEXUS"
-                target_x = 10
-                target_y = 10
-                return self._get_move_pathfind(target_x, target_y)
-            elif self.phase == "FIND_NEW_NEXUS":
+                else:
+                    target_x = 10
+                    target_y = 10
+                    return self._get_move_pathfind(target_x, target_y)
+            if self.phase == "FIND_TARGET":
+                target_x = self.general_targets[self.general_target_index][0]
+                target_y = self.general_targets[self.general_target_index][1]
+                if self._in_target_area(target_x, target_y):
+                    self.phase == "FIND_NEW_NEXUS"
+                else:
+                    return self._get_move_pathfind(target_x, target_y)
+            if self.phase == "FIND_NEW_NEXUS":
                 self._find_new_nexus()
-            elif self.phase == "MOVE_TO_NEW_NEXUS":
+            if self.phase == "MOVE_TO_NEW_NEXUS":
                 return self._get_move_find_new_nexus()
         else:
             return self._get_move_pathfind(0, 0)
@@ -277,6 +294,16 @@ class MyRobot(BCAbstractRobot):
         return (-1, -1)
 
     ############### METHODS FOR NEW ROBOTS ###################
+    def _in_target_area(self, target_x, target_y):
+        """
+        Are you close to a target area
+        """
+        if abs(me.x - target_x) < 3 and \
+           abs(me.y - target_y) < 3:
+            return True
+        else:
+            return False
+
     def _update_target(self):
         """
         If you're a new robot, then check where you are by
@@ -287,17 +314,17 @@ class MyRobot(BCAbstractRobot):
         Else, move onto new target
         """
         me = self.me()
-        for i in range(target_index, len(self.targets)):
-            if abs(me.x - self.targets[i][0]) < 4 and \
-               abs(me.y - self.targets[i][1]) < 4:
-                self.target_index = i
+        for i in range(self.general_target_index, len(self.general_targets)):
+            if abs(me.x - self.general_targets[i][0]) < 3 and \
+               abs(me.y - self.general_targets[i][1]) < 3:
+                self.general_target_index = i
                 break
 
-        if self._find_new_nexus() == False:
-            return self.target_index
+        if self._find_new_nexus() == True:
+            return self.general_target_index
         else:
-            self.target_index += 1
-            return self.target_index 
+            self.general_target_index += 1
+            return self.general_target_index 
 
 
     def _in_nexus(self):
@@ -316,11 +343,12 @@ class MyRobot(BCAbstractRobot):
     def _is_new_robot(self):
         """
         Conditions:
+        - turn counter is below 3
         - health below 50
         - in the centre of 4 robots
         """
         me = self.me()
-        if me.health < 50 and self._in_nexus():
+        if me.health < 50 and self._in_nexus() and self.num_turns < 3:
             return True
         return False
 
