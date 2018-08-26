@@ -15,6 +15,8 @@ Ident testing notes:
 -       see their ID as zero. (Can be solved in actual competition code 
 -       by having 0 as first ident signal; this cannot be done in current 
 -       two-team test code)    
+4) Removed restriction that a robot marked as an enemy is permanetly marked as such 
+-   Results seem more robust.
 
 Code currently suffers from "TypeError: Robot is not a function" errors.
 """
@@ -50,7 +52,6 @@ class MyRobot(BCAbstractRobot):
     
     friend_ids = set([])
     enemy_ids = set([])
-    trusted_ids = set([])
     suspect_ids = set([])
     
     # List of identifying signals every robot cycles through
@@ -175,10 +176,15 @@ class MyRobot(BCAbstractRobot):
                 if (robot_id == self.me()["id"]):
                     self.friend_ids.add(robot_id)
                 # If broadcasted same ID, add to friends
-                elif (self.ident_sig[self.ident_sig_num] == robot_signal) or \
-                   (self.ident_sig[old_ident_sig_num] == robot_signal):
+                elif (self.ident_sig[self.ident_sig_num] == robot_signal):
                     # No longer a suspect if is a suspect
                     self.suspect_ids.discard(robot_id)
+                    self.enemy_ids.discard(robot_id)
+                    self.friend_ids.add(robot_id)
+                elif (self.ident_sig[old_ident_sig_num] == robot_signal):
+                    # No longer a suspect if is a suspect
+                    self.suspect_ids.discard(robot_id)
+                    self.enemy_ids.discard(robot_id)
                     self.friend_ids.add(robot_id)
                 else:
                     # If robot is already suspected, move it to enemies set
@@ -192,7 +198,7 @@ class MyRobot(BCAbstractRobot):
                     # until its turn happens 
                     
             # Check for intersections and remove them from friends
-            self.trusted_ids = self.trusted_ids.difference(self.trusted_ids.intersection(self.enemy_ids))
+            self.friend_ids = self.friend_ids.difference(self.friend_ids.intersection(self.enemy_ids))
            
     # Returns the index of the ident that a new robot should be initialized to
     def _init_ident_num(self):
