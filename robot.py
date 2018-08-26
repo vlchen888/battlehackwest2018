@@ -55,6 +55,18 @@ class MyRobot(BCAbstractRobot):
     curr_y = -1
 
     VIEW_SIZE = 7
+
+    targets = [
+        [10, 10],
+        [17, 10],
+        [17, 17],
+        [24, 17],
+        [24, 24],
+        [31, 24],
+        [31, 31]
+    ]
+
+    target_index = 0
     
 
     def relative_pos_to_dir(self, dX, dY):
@@ -143,6 +155,55 @@ class MyRobot(BCAbstractRobot):
         return None
     
 
+    ############### METHODS FOR NEW ROBOTS ###################
+    def _update_target(self):
+        """
+        If you're a new robot, then check where you are by
+        iterating through the nexus list
+
+        If the current target has more eligible nexus, stay
+
+        Else, move onto new target
+        """
+        me = self.me()
+        for i in range(target_index, len(self.targets)):
+            if abs(me.x - self.targets[i][0]) < 4 and \
+               abs(me.y - self.targets[i][1]) < 4:
+                self.target_index = i
+                break
+
+        if self._find_new_nexus() == False:
+            return self.target_index
+        else:
+            self.target_index += 1
+            return self.target_index 
+
+
+    def _in_nexus(self):
+        cells = [
+            [0, 1],
+            [0, -1],
+            [-1, 0],
+            [1, 0]
+        ]
+        for cell in cells:
+            cell_type = self.get_relative_pos(cell[0], cell[1])
+            if cell_type in [bc.EMPTY, bc.HOLE] or not _is_friendly(cell_type.id):
+                return False
+        return True
+
+    def _is_new_robot(self):
+        """
+        Conditions:
+        - health below 50
+        - in the centre of 4 robots
+        """
+        me = self.me()
+        if me.health < 50 and self._in_nexus():
+            return True
+        return False
+
+    ##########################################################
 
 
     ############### METHODS FOR BFS ##########################
