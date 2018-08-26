@@ -50,6 +50,7 @@ class MyRobot(BCAbstractRobot):
     
     friend_ids = set([])
     enemy_ids = set([])
+    trusted_ids = set([])
     suspect_ids = set([])
     
     # List of identifying signals every robot cycles through
@@ -137,7 +138,7 @@ class MyRobot(BCAbstractRobot):
             
         # ##### TEMPORARY CODE - REMOVE BEFORE COMPETITION #####
         if self.me()["team"] == 0:
-            self.ident_sig = [0, 2, 4, 5, 7, 1, 6, 3]
+            self.ident_sig = [3, 7, 1, 0, 6, 4, 2, 5]
         
         # Broadcast ID 
         #   ADD LOGIC FOR 4th BIT WHEN NEEDED
@@ -156,37 +157,42 @@ class MyRobot(BCAbstractRobot):
    
     # Classifies each visible robot.
     def _classify_visible_robots(self):
+        
+        # Classify based on signal
+        # During the current robot's turn, all robots have either broadcasted the new ident_sig
+        # or not
+        old_ident_sig_num = self.ident_sig_num - 1
+        if old_ident_sig_num < 0:
+            old_ident_sig_num = self.IDENT_SIG_LEN - 1
+            
         robots = self.get_visible_robots()
-        #self.log(ident_sig_num)
         for robot in robots:
             robot_id = robot.id
             robot_signal = robot.signal
            
-            # Classify based on signal
-            # During the current robot's turn, all robots have either broadcasted the new ident_sig
-            # or not
-            old_ident_sig_num = self.ident_sig_num - 1
-            if old_ident_sig_num < 0:
-                old_ident_sig_num = self.IDENT_SIG_LEN - 1
-           
-            if (robot_id == self.me()["id"]):
-                self.friend_ids.add(robot_id)
-                self.suspect_ids.discard(robot_id)
-            elif (self.ident_sig[self.ident_sig_num] == robot_signal) or \
-               (self.ident_sig[old_ident_sig_num] == robot_signal):
-                self.friend_ids.add(robot_id)
-                self.suspect_ids.discard(robot_id)
-            else:
-                # If robot is already suspected, move it to enemies set
-                if robot_id in self.suspect_ids:
+            if robot_id not in self.friend_ids:
+                # If self, certainly a friend
+                if (robot_id == self.me()["id"]):
+                    self.friend_ids.add(robot_id)
+                # If broadcasted same ID, add to friends
+                elif (self.ident_sig[self.ident_sig_num] == robot_signal) or \
+                   (self.ident_sig[old_ident_sig_num] == robot_signal):
+                    # No longer a suspect if is a suspect
                     self.suspect_ids.discard(robot_id)
-                    self.enemy_ids.add(robot_id)
-                # Otherwise add to suspected
+                    self.friend_ids.add(robot_id)
                 else:
-                    self.suspect_ids.add(robot_id)
-               
+                    # If robot is already suspected, move it to enemies set
+                    if robot_id in self.suspect_ids:
+                        self.suspect_ids.discard(robot_id)
+                        self.enemy_ids.add(robot_id)
+                    # Otherwise add to suspected
+                    else:
+                        self.suspect_ids.add(robot_id)
+                    # Must be two-step since a robot is always initialized with a signal of zero
+                    # until its turn happens 
+                    
             # Check for intersections and remove them from friends
-            self.friend_ids = self.friend_ids.difference(self.friend_ids.intersection(self.enemy_ids))
+            self.trusted_ids = self.trusted_ids.difference(self.trusted_ids.intersection(self.enemy_ids))
            
     # Returns the index of the ident that a new robot should be initialized to
     def _init_ident_num(self):
