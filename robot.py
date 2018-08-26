@@ -174,20 +174,20 @@ class MyRobot(BCAbstractRobot):
         #if new_ident_sig_num >= self.IDENT_SIG_LEN:
         #    new_ident_sig_num = 0
         
-        self.log('Examining neighbors of Robot ' + self.me()["id"])
-        self.log('Current and previous IDs: ' + curr_sig + ' ' + old_sig)
+        #self.log('Examining neighbors of Robot ' + self.me()["id"])
+        #self.log('Current and previous IDs: ' + curr_sig + ' ' + old_sig)
             
         robots = self.get_visible_robots()
         for robot in robots:
             robot_id = robot.id
             robot_signal = robot.signal
             
-            self.log('Looking at Robot ' + robot_id + ' with signal ' +robot_signal)
+            #self.log('Looking at Robot ' + robot_id + ' with signal ' +robot_signal)
            
             # If self, certainly a friend
             if (robot_id == self.me()["id"]):
                 self.friend_ids.add(robot_id)
-                self.log('Friendly - self')
+                #self.log('Friendly - self')
             # If broadcasted same ID, add to friends
             elif (robot_signal == curr_sig) or \
                  (robot_signal == old_sig): #or \
@@ -196,21 +196,22 @@ class MyRobot(BCAbstractRobot):
                 self.suspect_ids.discard(robot_id)
                 self.enemy_ids.discard(robot_id)
                 self.friend_ids.add(robot_id)
-                self.log('Friendly - match')
+                #self.log('Friendly - match')
             elif robot_id not in self.enemy_ids:
                 # If robot is already suspected, move it to enemies set
                 if robot_id in self.suspect_ids:
                     self.suspect_ids.discard(robot_id)
                     self.enemy_ids.add(robot_id)
-                    self.log('Enemy')
+                    #self.log('Enemy')
                 # Otherwise add to suspected
                 else:
                     self.suspect_ids.add(robot_id)
-                    self.log('Suspected')
+                    #self.log('Suspected')
                 # Must be two-step since a robot is always initialized with a signal of zero
                 # until its turn happens 
-            else:
-                self.log('Already marked as enemy')
+            #else:
+                # Already marked as an enemy.
+                #self.log('Already marked as enemy')
                     
             # Check for intersections and remove them from friends
             self.friend_ids = self.friend_ids.difference(self.friend_ids.intersection(self.enemy_ids))
