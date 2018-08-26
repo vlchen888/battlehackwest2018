@@ -50,6 +50,7 @@ class MyRobot(BCAbstractRobot):
     ident_sig = [6, 4, 2, 5, 3, 7, 1, 0]
     ident_sig_num = None
 
+    my_signal = 0
 
     num_turns = 0
     dest_x = -1
@@ -83,18 +84,14 @@ class MyRobot(BCAbstractRobot):
             
 
     def turn(self):
-        if self.ident_sig_num == None:
-            self.ident_sig_num = self._init_ident_num()          # Current # identifier being broadcast
-        
-        if self.me()["team"] == 0:
-            self.ident_sig = [0, 2, 4, 5, 7, 1, 6]
-            
         # Log some metadata
         self.num_turns += 1 
         self._identify()
         
         # ##############################
-        self.log(self.me()["signal"])
+        #self.log(self.ident_sig_num)
+        #self.log(self.ident_sig[self.ident_sig_num])
+        #self.log(self.me()["signal"])
         self.log(self.friend_ids)
         self.log(self.enemy_ids)
         # ##############################
@@ -125,12 +122,24 @@ class MyRobot(BCAbstractRobot):
            
     # Broadcasts current ID message.
     def _broadcast_sig(self):
-        #if self.ident_sig_num == None:
-        #    self.ident_sig_num = 0
-        self.signal(self.ident_sig[self.ident_sig_num])
-        #self.log(ident_sig[ident_sig_num])
-        #self.log(ident_sig_num)
+        if self.ident_sig_num == None:
+            self.ident_sig_num =  self._init_ident_num() 
+            
+        # ##### TEMPORARY CODE - REMOVE BEFORE COMPETITION #####
+        if self.me()["team"] == 0:
+            self.ident_sig = [0, 2, 4, 5, 7, 1, 6, 3]
+        
+        # Broadcast ID 
+        #   ADD LOGIC FOR 4th BIT WHEN NEEDED
+        self.my_signal = self.ident_sig[self.ident_sig_num]
+        self.signal(self.my_signal)
+
+        # ###############################################
+        #self.log(self.ident_sig[self.ident_sig_num])
         #self.log(self.me()["signal"])
+        # ###############################################
+        
+        # Increment
         self.ident_sig_num += 1
         if self.ident_sig_num >= self.IDENT_SIG_LEN:
             self.ident_sig_num = 0
@@ -142,7 +151,6 @@ class MyRobot(BCAbstractRobot):
         for robot in robots:
             robot_id = robot.id
             robot_signal = robot.signal
-            #self.log(robot_signal)
            
             # Classify based on signal
             # During the current robot's turn, all robots have either broadcasted the new ident_sig
