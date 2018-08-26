@@ -2,6 +2,14 @@ import random
 import math
 
              
+"""
+Branch from master, f190a4c951ba36d89fa1d8cea6f029ef58e8820a by vlchen888
+Ident testing notes:
+
+1) Each robot cycles through ident list successfully
+2) Incorrectly identifies enemies (but possibly due to both teams having same ident list)
+"""
+
 
 class Util:
     @classmethod
@@ -30,6 +38,19 @@ class MyRobot(BCAbstractRobot):
         bc.WEST,
         bc.NORTHWEST,
     ]
+    
+    friend_ids = set([])
+    enemy_ids = set([])
+    
+    # List of identifying signals every robot cycles through
+    # If there is a mismatch, the offender is an enemy
+    # List of identifying signals every robot cycles through
+    # If there is a mismatch, the offender is an enemy
+    IDENT_SIG_LEN = 8
+    
+    ident_sig = [6, 4, 2, 5, 3, 7, 1, 0]
+    ident_sig_num = 0          # Current # identifier being broadcast
+
 
     num_turns = 0
     dest_x = -1
@@ -63,10 +84,16 @@ class MyRobot(BCAbstractRobot):
             
 
     def turn(self):
+        if self.me()["team"] == 0:
+            self.ident_sig = [0, 2, 4, 5, 7, 1, 6]
+            
         # Log some metadata
         self.num_turns += 1 
-        self.log(self.num_turns)
-
+        self._identify()
+        self.log(self.me()["signal"])
+        self.log(self.friend_ids)
+        self.log(self.enemy_ids)
+        
         self.curr_x = self.me()["x"]
         self.curr_y = self.me()["y"]
 
@@ -75,14 +102,92 @@ class MyRobot(BCAbstractRobot):
         num_friendlies = self._get_num_friendlies()
 
         if self.me()["team"] == 1:
-            if phase == "FIND_TEAM":
+            if self.phase == "FIND_TEAM":
                 target_x = 10
                 target_y = 10
                 return self._get_move_pathfind(target_x, target_y)
-            elif phase == "BUILD_NEXUS":
+            elif self.phase == "BUILD_NEXUS":
                 pass
         else:
             return
+        
+    # Identifies the robot by broadcasting ident and checking neighbors
+    #   Call on every turn
+    def _identify(self):
+        # Broadcast new signal first, then classify
+        self._broadcast_sig()
+        self._classify_visible_robots()
+           
+    # Broadcasts current ID message.
+    def _broadcast_sig(self):
+        #if self.ident_sig_num == None:
+        #    self.ident_sig_num = 0
+        self.signal(self.ident_sig[self.ident_sig_num])
+        #self.log(ident_sig[ident_sig_num])
+        #self.log(ident_sig_num)
+        #self.log(self.me()["signal"])
+        self.ident_sig_num += 1
+        if self.ident_sig_num >= self.IDENT_SIG_LEN:
+            self.ident_sig_num = 0
+   
+    # Classifies each visible robot.
+    def _classify_visible_robots(self):
+        robots = self.get_visible_robots()
+        #self.log(ident_sig_num)
+        for robot in robots:
+            robot_id = robot.id
+            robot_signal = robot.signal
+            #self.log(robot_signal)
+           
+            # Classify based on signal
+            # During the current robot's turn, all robots have either broadcasted the new ident_sig
+            # or not
+            old_ident_sig_num = self.ident_sig_num - 1
+            if old_ident_sig_num < 0:
+                old_ident_sig_num = self.IDENT_SIG_LEN - 1
+           
+            if (robot_id == self.me()["id"]):
+                self.friend_ids.add(robot_id)
+            elif (self.ident_sig[self.ident_sig_num] == robot_signal) or \
+               (self.ident_sig[old_ident_sig_num] == robot_signal):
+                self.friend_ids.add(robot_id)
+            else:
+                self.enemy_ids.add(robot_id)
+               
+            # Check for intersections and remove them from friends
+            self.friend_ids = self.friend_ids.difference(self.friend_ids.intersection(self.enemy_ids))
+           
+    # Returns the index of the ident that a new robot should be initialized to
+    def _init_ident_num(self):
+        # Check for parents - 4 robots immediately adjoining the new robot. 1 of 3 cases
+        #   - Starting robot, no neighbor   - return 0
+        #   - Starting robot, neighbors     - return 0
+        #   - Newly spawned robot           - return ident index of a neighbor
+        parents = self._get_parents()
+        # No parents - we are on turn 0
+        if parents.len == 0:
+            # index is 0 on startup
+            return 0
+        else:
+            # Get current signal of a parent
+            new_sig = parents[0].me()["signal"]
+           
+            # Find index of new signal and return it
+            return self.ident_sig.index(new_sig)
+       
+       
+    # Returns a list of the 4 robots that spawned a new robot, if they exist
+    #   Used to initialize the signaling for a new robot to match that of the parent
+    #   If erroneously called because two original robots are next to each other,
+    #   doesn't matter, since all starting robots are initialized with same ident index
+    def _get_parents(self):
+        parents = []
+        for dx in [-1, 1]:
+            for dy in [-1, 1]:
+                thing_around = self.get_relative_pos(dx, dy)
+                if (type(thing_around) == type(self)):
+                    parents.append(thing_around)
+        return parents
         
 
     # TODO
