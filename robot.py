@@ -75,14 +75,16 @@ class MyRobot(BCAbstractRobot):
         num_friendlies = self._get_num_friendlies()
 
         if self.me()["team"] == 1:
-            if phase == "FIND_TEAM":
+            if False:
                 target_x = 10
                 target_y = 10
                 return self._get_move_pathfind(target_x, target_y)
-            elif phase == "BUILD_NEXUS":
-                pass
+            else:
+                (target_x, target_y) = self._find_existing_nexus()
+                if target_y != -1:
+                    return self._get_move_pathfind(target_x, target_y)
         else:
-            return
+            return self._get_move_pathfind(0, 0)
         
 
     # TODO
@@ -161,6 +163,7 @@ class MyRobot(BCAbstractRobot):
         for i in currentRobos:
             if self._is_friendly(i.id):
                 signal = i.signal
-                if NEXUS_MASK&signal == NEXUS_MASK:
+                if self.NEXUS_MASK&signal == self.NEXUS_MASK:
                     return self.compute_min_nexus_dist(i.x, i.y)
+        return (-1, -1)
 
