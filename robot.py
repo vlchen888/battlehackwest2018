@@ -14,6 +14,22 @@ class Util:
             return 0
 
 
+class Queue(object):
+    def __init__(self):
+        self.queue = []
+    def put(self, item):
+        self.queue.append(item)
+    def get(self):
+        # assert(not self.empty()), "trying to get from empty queue"
+        val = self.queue[0]
+        self.queue = self.queue[1:]
+        return val
+    def empty(self):
+        if len(self.queue) == 0:
+            return True
+        return False
+
+
 
 class MyRobot(BCAbstractRobot):
     
@@ -126,3 +142,156 @@ class MyRobot(BCAbstractRobot):
 
         return None
     
+
+
+
+    ############### METHODS FOR BFS ##########################
+
+    def _array_copy(self, arr):
+        new_arr = []
+        for i in arr:
+            new_arr.append(i)
+        return new_arr
+
+
+    def _get_min_path(self, dX, dY):
+        # self.log(["finding min path to:", dX, dY])
+        assert(abs(dX) <= 3 or abs(dY) <= 3)
+        
+        visited = []
+        for i in range(7):
+            row = []
+            for j in range(7):
+                row.append(False)
+            visited.append(row)
+
+        q = Queue()
+        q.put(
+            (
+                (3, 3),
+                []
+            )
+        )
+        visited[3][3] = True
+
+        while not q.empty():
+            node, path = q.get()
+            path.append(node)
+            neighbours = [
+                (node[0] + 1, node[1] + 1),
+                (node[0] - 1, node[1] + 1),
+                (node[0] + 1, node[1] - 1),
+                (node[0] - 1, node[1] - 1),
+                (node[0] - 1, node[1]),
+                (node[0] + 1, node[1]),
+                (node[0], node[1] + 1),
+                (node[0], node[1] - 1)    
+            ]
+            for neighbour in neighbours:
+                if neighbour[0] - 3 == dX and neighbour[1] - 3 == dY:
+                    # self.log(["found spot", neighbour, dX, dY, path])
+                    return path
+                if neighbour[0] < 0 or neighbour[0] > 6 or \
+                   neighbour[1] < 0 or neighbour[1] > 6:
+                    continue
+                if visited[neighbour[0]][neighbour[1]] == False:
+                    visited[neighbour[0]][neighbour[1]] = True
+                    neighbour_val = self.get_relative_pos(neighbour[0] - 3, neighbour[1] - 3)
+                    if neighbour_val == bc.EMPTY:
+                        q.put(
+                            (
+                                neighbour,
+                                self._array_copy(path)
+                            )
+                        )
+        return None
+
+
+    def _get_next_move_to_location(self, dX, dY):
+        try:
+            path = self._get_min_path(dX, dY)
+        except:
+            self.log(["got rekt at finding path"])
+            path = []
+        # self.log(["got path", path])
+        if path != None and len(path) > 1:
+            # self.log(["valid path"])
+            x, y = path[1][0] - 3, path[1][1] - 3
+            # self.log(["matching to move", x, y])
+            if self.get_relative_pos(x, y) != bc.EMPTY:
+                # self.log(["move not empty", self.get_relative_pos(x, y)])
+                return None
+            return self.relative_pos_to_dir(x, y)
+            # self.log([x, y, "didn't match any direction"])
+        else:
+            return None
+
+
+    ############### END METHODS FOR BFS ##########################
+    ############### OTHER BFS METHODS ############################
+
+    def _get_closest_friendly_robot(self):
+        me = self.me()
+        closest_robot = None
+        smallest_distance = None
+        for robot in self.get_visible_robots():
+            # self.log(["my stuff and their signal", self.me(), robot.signal])
+            if me.id != robot.id and _is_friendly(robot):
+                distance = math.sqrt((robot.x - me.x) ** 2 + (robot.y - me.y) ** 2)
+                if smallest_distance == None or distance < smallest_distance:
+                    closest_robot = robot
+                    smallest_distance = distance
+        return [closest_robot, smallest_distance]
+
+            
+    def _get_relative_coord_of_robot(self, robot):
+        me = self.me()
+        vis_map = self.get_visible_map()
+        for i, row in enumerate(vis_map):
+            for j, col in enumerate(row):
+                if vis_map[i][j] == robot.id:
+                    return (j - 3, i - 3)
+        return None
+
+
+    def _get_move_to_robot(self):
+        me = self.me()
+        closest_robot = None
+        closest_robot, distance = self._get_closest_friendly_robot()
+        if closest_robot != None and distance >= 2:
+            rel_robot_coord = self._get_relative_coord_of_robot(closest_robot)
+            if rel_robot_coord != None:
+                try:
+                    next_move = self.get_next_move_to_location(rel_robot_coord[0], rel_robot_coord[1])
+                    return next_move
+                except:
+                    self.log(["got rekt at finding move"])
+                    return None
+        return None
+
+
+    def _print_list_of_dicts(self, list_of_dicts):
+        keys = []
+        vals = []
+        for d in list_of_dicts:
+            for k in list(d.keys()):
+                keys.append(k)
+            for val in list(d.values()):
+                vals.append(val)
+        self.log([keys, vals])
+
+    """
+    try:
+        move_to_robot = self.get_move_to_robot()
+    except:
+        self.log(["had exception"])
+    if move_to_robot != None:
+        self.log(["Moving to direction:", move_to_robot])
+        return self.move(move_to_robot)
+    else:
+        closest_robot, smallest_distance = self.get_closest_friendly_robot()
+        if closest_robot == None:
+            return self.move(random.choice(self.DIRECTIONS))
+    """
+
+#########################################################################
